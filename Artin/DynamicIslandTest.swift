@@ -77,22 +77,23 @@ struct DynamicIslandTest: View {
                         // Content inside Dynamic Island
                         VStack(spacing: 8) {
 
-                            if isExpanded {
-
-                                Text("Hello User!")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.white)
-
-                                Text("Welcome to Dynamic Island")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.gray)
-
-                            } else {
-
-                                Text("Hello!")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.white)
+                            // Expanded button
+                            Button {
+                                print("Pressed")
+                            } label: {
+                                Text(">")
+                                    .font(.title)
+                                    .padding()
+                                    .glassEffect(.regular.tint(.orange).interactive())
                             }
+                            .opacity(isExpanded ? 1 : 0)
+                            .disabled(!isExpanded)
+
+                            // Collapsed content
+                            Text("")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white)
+                                .opacity(isExpanded ? 0 : 1)
                         }
                         .frame(
                             width: width - 10,
