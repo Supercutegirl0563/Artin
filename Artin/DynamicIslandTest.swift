@@ -1,3 +1,4 @@
+
 //
 //  DynamicIslandTest.swift
 //  Artin
@@ -9,12 +10,11 @@ import SwiftUI
 import NotchMyProblem
 
 struct DynamicIslandTest: View {
+
     @State private var isExpanded = false
-    
-    
-    
+
     var body: some View {
-        
+
         GeometryReader { geo in
 
             ZStack {
@@ -33,7 +33,7 @@ struct DynamicIslandTest: View {
                     let padding: CGFloat = 1
 
                     let width = rect.width + padding * 2 + (isExpanded ? 100 : 0)
-                    let height = rect.height + padding * 2 + (isExpanded ? 140 : 0)
+                    let height = rect.height + padding * 2 + (isExpanded ? 280 : 0)
 
                     let ringColor = Color(
                         red: 45.0 / 255.0,
@@ -55,10 +55,6 @@ struct DynamicIslandTest: View {
                                 width: width + 5,
                                 height: height + 5
                             )
-                            .animation(
-                                .spring(response: 0.4, dampingFraction: 0.7),
-                                value: isExpanded
-                            )
                             .overlay {
 
                                 // Blue outer ring
@@ -78,7 +74,35 @@ struct DynamicIslandTest: View {
                                 y: 5
                             )
 
-                       
+                        // Content inside Dynamic Island
+                        VStack(spacing: 8) {
+
+                            if isExpanded {
+
+                                Text("Hello User!")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
+
+                                Text("Welcome to Dynamic Island")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.gray)
+
+                            } else {
+
+                                Text("Hello!")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(
+                            width: width - 10,
+                            height: height - 10
+                        )
+                        .multilineTextAlignment(.center)
+                        .animation(
+                            .spring(response: 0.4, dampingFraction: 0.7),
+                            value: isExpanded
+                        )
                     }
                     .position(
                         x: rect.midX,
@@ -88,6 +112,7 @@ struct DynamicIslandTest: View {
             }
             .statusBarHidden(true)
             .onTapGesture(count: 3) {
+
                 print("Clicked")
 
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
@@ -96,14 +121,7 @@ struct DynamicIslandTest: View {
             }
         }
         .ignoresSafeArea()
-
-
-
-
-        
-    
     }
-        
 }
 
 #Preview {
