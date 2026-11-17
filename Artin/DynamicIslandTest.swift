@@ -10,15 +10,19 @@ import SwiftUI
 import NotchMyProblem
 
 struct DynamicIslandTest: View {
-
+    
     @State private var isExpanded = false
-
+    
+    @State private var BrushList: [String] = ["Pen", "Marker", "Eraser"]
+    
+    @State private var selectedBrush: String? = "Marker"
+    
     var body: some View {
-
+        
         GeometryReader { geo in
-
+            
             ZStack {
-
+                
                 // Background
                 Color(
                     red: 145.0 / 255.0,
@@ -26,28 +30,28 @@ struct DynamicIslandTest: View {
                     blue: 255.0 / 255.0
                 )
                 .ignoresSafeArea()
-
+                
                 if let rect = NotchMyProblem.shared.adjustedExclusionRect {
-
+                    
                     let lineWidth: CGFloat = 8
                     let padding: CGFloat = 1
-
+                    
                     let width = rect.width + padding * 2 + (isExpanded ? 100 : 0)
                     let height = rect.height + padding * 2 + (isExpanded ? 280 : 0)
-
+                    
                     let ringColor = Color(
                         red: 45.0 / 255.0,
                         green: 105.0 / 255.0,
                         blue: 210.0 / 255.0
                     )
-
+                    
                     let islandShape = RoundedRectangle(
                         cornerRadius: 22,
                         style: .continuous
                     )
-
+                    
                     ZStack {
-
+                        
                         // Visible Dynamic Island
                         islandShape
                             .fill(Color.black)
@@ -56,7 +60,7 @@ struct DynamicIslandTest: View {
                                 height: height + 5
                             )
                             .overlay {
-
+                                
                                 // Blue outer ring
                                 islandShape
                                     .stroke(
@@ -73,27 +77,42 @@ struct DynamicIslandTest: View {
                                 radius: 8,
                                 y: 5
                             )
-
+                        
                         // Content inside Dynamic Island
                         VStack(spacing: 8) {
+                            GeometryReader { geometry in
+                                        // Width allocated to each item (1/3 of the screen)
+                                        let itemWidth = geometry.size.width / 3
+                                        // Padding needed on both ends so the 1st and last items can reach the center
+                                        let edgePadding = (geometry.size.width - itemWidth) / 2
 
-                            // Expanded button
-                            Button {
-                                print("Pressed")
-                            } label: {
-                                Text(">")
-                                    .font(.title)
-                                    .padding()
-                                    .glassEffect(.regular.tint(.orange).interactive())
-                            }
-                            .opacity(isExpanded ? 1 : 0)
-                            .disabled(!isExpanded)
-
-                            // Collapsed content
-                            Text("")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.white)
-                                .opacity(isExpanded ? 0 : 1)
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 0) {
+                                                ForEach(BrushList, id: \.self) { brush in
+                                                    Text(brush)
+                                                        .fontWeight(selectedBrush == brush ? .bold : .regular)
+                                                        .foregroundStyle(selectedBrush == brush ? .yellow : .white.opacity(0.6))
+                                                        .frame(width: itemWidth)
+                                                        .contentShape(Rectangle())
+                                                        .onTapGesture {
+                                                            withAnimation {
+                                                                selectedBrush = brush
+                                                            }
+                                                        }
+                                                        .opacity(isExpanded ? 1 : 0)
+                                                        .disabled(!isExpanded)
+                                                        
+                                                }
+                                            }
+                                            .scrollTargetLayout() // Tells SwiftUI each item inside is a snap target
+                                        }
+                                        .safeAreaPadding(.horizontal, edgePadding)
+                                        .scrollTargetBehavior(.viewAligned) // Snaps the nearest item to the center
+                                        .scrollPosition(id: $selectedBrush, anchor: .center) // Syncs scroll position with state
+                                    }
+                                    .frame(height: 50)
+                            
+                            
                         }
                         .frame(
                             width: width - 10,
@@ -113,9 +132,9 @@ struct DynamicIslandTest: View {
             }
             .statusBarHidden(true)
             .onTapGesture(count: 3) {
-
+                
                 print("Clicked")
-
+                
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     isExpanded.toggle()
                 }
