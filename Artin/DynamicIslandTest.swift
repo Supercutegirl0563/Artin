@@ -15,7 +15,9 @@ struct DynamicIslandTest: View {
     
     @State private var BrushList: [String] = ["Pen", "Marker", "Eraser"]
     
-    @State private var selectedBrush: String? = "Marker"
+    @State private var selectedBrush: String? = nil
+    
+    @State private var HapticPlaying: Bool = false
     
     var body: some View {
         
@@ -81,37 +83,40 @@ struct DynamicIslandTest: View {
                         // Content inside Dynamic Island
                         VStack(spacing: 8) {
                             GeometryReader { geometry in
-                                        // Width allocated to each item (1/3 of the screen)
-                                        let itemWidth = geometry.size.width / 3
-                                        // Padding needed on both ends so the 1st and last items can reach the center
-                                        let edgePadding = (geometry.size.width - itemWidth) / 2
+                                let itemWidth = geometry.size.width / 3
+                                let edgePadding = (geometry.size.width - itemWidth) / 2
 
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 0) {
-                                                ForEach(BrushList, id: \.self) { brush in
-                                                    Text(brush)
-                                                        .fontWeight(selectedBrush == brush ? .bold : .regular)
-                                                        .foregroundStyle(selectedBrush == brush ? .yellow : .white.opacity(0.6))
-                                                        .frame(width: itemWidth)
-                                                        .contentShape(Rectangle())
-                                                        .onTapGesture {
-                                                            withAnimation {
-                                                                selectedBrush = brush
-                                                            }
-                                                        }
-                                                        .opacity(isExpanded ? 1 : 0)
-                                                        .disabled(!isExpanded)
-                                                        
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 0) {
+                                        ForEach(BrushList, id: \.self) { brush in
+                                            Text(brush)
+                                                .fontWeight(selectedBrush == brush ? .bold : .regular)
+                                                .foregroundStyle(selectedBrush == brush ? .yellow : .white.opacity(0.6))
+                                                .frame(width: itemWidth)
+                                                .contentShape(Rectangle())
+                                                .onTapGesture {
+                                                    withAnimation {
+                                                        selectedBrush = brush
+                                                    }
                                                 }
-                                            }
-                                            .scrollTargetLayout() // Tells SwiftUI each item inside is a snap target
+                                                .opacity(isExpanded ? 1 : 0)
+                                                .disabled(!isExpanded)
                                         }
-                                        .safeAreaPadding(.horizontal, edgePadding)
-                                        .scrollTargetBehavior(.viewAligned) // Snaps the nearest item to the center
-                                        .scrollPosition(id: $selectedBrush, anchor: .center) // Syncs scroll position with state
                                     }
-                                    .frame(height: 50)
-                            
+                                    .scrollTargetLayout()
+                                }
+                                .contentMargins(.horizontal, edgePadding, for: .scrollContent)
+                                .scrollTargetBehavior(.viewAligned)
+                                .scrollPosition(id: $selectedBrush, anchor: .center)
+                                .sensoryFeedback(.selection, trigger: selectedBrush) // Triggers on both drag and tap
+                                .onAppear {
+                                    DispatchQueue.main.async {
+                                        selectedBrush = "Marker"
+                                    }
+                                }
+                            }
+                            .frame(height: 50)
+
                             
                         }
                         .frame(
