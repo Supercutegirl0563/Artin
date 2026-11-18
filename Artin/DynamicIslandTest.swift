@@ -82,40 +82,80 @@ struct DynamicIslandTest: View {
                         
                         // Content inside Dynamic Island
                         VStack(spacing: 8) {
-                            GeometryReader { geometry in
-                                let itemWidth = geometry.size.width / 3
-                                let edgePadding = (geometry.size.width - itemWidth) / 2
+                            GeometryReader { outerGeo in
+                                let itemWidth = outerGeo.size.width / 3
+                                let edgePadding = max(0, (outerGeo.size.width - itemWidth) / 2)
+                                let centerPoint = outerGeo.frame(in: .global).midX
 
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 0) {
-                                        ForEach(BrushList, id: \.self) { brush in
-                                            Text(brush)
-                                                .fontWeight(selectedBrush == brush ? .bold : .regular)
-                                                .foregroundStyle(selectedBrush == brush ? .yellow : .white.opacity(0.6))
-                                                .frame(width: itemWidth)
-                                                .contentShape(Rectangle())
-                                                .onTapGesture {
-                                                    withAnimation {
-                                                        selectedBrush = brush
-                                                    }
+                                ScrollViewReader { proxy in
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 0) {
+                                            ForEach(BrushList, id: \.self) { brush in
+                                                GeometryReader { itemGeo in
+                                                    let itemMidX = itemGeo.frame(in: .global).midX
+                                                    let isCentered = abs(centerPoint - itemMidX) < (itemWidth / 2)
+
+                                                    Text(brush)
+                                                        .font(.body)
+                                                        // Instant font weight and color (no animation wrapper delaying the swap)
+                                                        .fontWeight(isCentered ? .bold : .regular)
+                                                        .foregroundStyle(isCentered ? .yellow : .white.opacity(0.6))
+                                                        .frame(width: itemWidth, height: 50)
+                                                        // GPU-driven scale that tracks finger movement at 120fps with zero lag
+                                                        .visualEffect { content, proxy in
+                                                            let frame = proxy.frame(in: .scrollView)
+                                                            let scrollMidX = proxy.bounds(of: .scrollView)?.midX ?? 0
+                                                            let distance = abs(scrollMidX - frame.midX)
+                                                            let progress = max(0, 1 - (distance / itemWidth))
+                                                            return content.scaleEffect(1.0 + (0.15 * progress))
+                                                        }
+                                                        .contentShape(Rectangle())
+                                                        .onTapGesture {
+                                                            withAnimation(.snappy(duration: 0.25)) {
+                                                                selectedBrush = brush
+                                                            }
+                                                        }
                                                 }
+                                                .frame(width: itemWidth, height: 50)
+                                                .id(brush)
                                                 .opacity(isExpanded ? 1 : 0)
                                                 .disabled(!isExpanded)
+                                            }
+                                        }
+                                        .scrollTargetLayout()
+                                    }
+                                    .contentMargins(.horizontal, edgePadding, for: .scrollContent)
+                                    .scrollTargetBehavior(.viewAligned)
+                                    .scrollPosition(id: $selectedBrush, anchor: .center)
+                                    .sensoryFeedback(.selection, trigger: selectedBrush) { oldValue, newValue in
+                                        oldValue != nil && newValue != nil && isExpanded
+                                    }
+                                    .onChange(of: isExpanded) { _, expanded in
+                                        if expanded {
+                                            let target = selectedBrush ?? "Marker"
+                                            selectedBrush = nil
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                                selectedBrush = target
+                                                proxy.scrollTo(target, anchor: .center)
+                                            }
                                         }
                                     }
-                                    .scrollTargetLayout()
-                                }
-                                .contentMargins(.horizontal, edgePadding, for: .scrollContent)
-                                .scrollTargetBehavior(.viewAligned)
-                                .scrollPosition(id: $selectedBrush, anchor: .center)
-                                .sensoryFeedback(.selection, trigger: selectedBrush) // Triggers on both drag and tap
-                                .onAppear {
-                                    DispatchQueue.main.async {
-                                        selectedBrush = "Marker"
+                                    .onChange(of: outerGeo.size.width) { _, newWidth in
+                                        if isExpanded, newWidth > 0, let current = selectedBrush {
+                                            proxy.scrollTo(current, anchor: .center)
+                                        }
+                                    }
+                                    .onAppear {
+                                        if selectedBrush == nil {
+                                            selectedBrush = "Marker"
+                                        }
                                     }
                                 }
                             }
                             .frame(height: 50)
+
+
+
 
                             
                         }
