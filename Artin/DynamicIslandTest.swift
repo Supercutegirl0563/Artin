@@ -22,6 +22,13 @@ struct DynamicIslandTest: View {
     @State private var BrushThickeness: Double = 45
     
     @State private var BrushOpacity: Double = 0.5
+    @State private var selectedControlRow = 0
+    @State private var previousDragTranslation = CGSize.zero
+    @State private var verticalSelectionApplied = false
+    @State private var dragAxis = 0
+    @State private var brushSwipeRemainder: CGFloat = 0
+    @State private var horizontalHapticRemainder: CGFloat = 0
+    @State private var horizontalHapticTick = 0
     
     var body: some View {
         
@@ -160,6 +167,11 @@ struct DynamicIslandTest: View {
                                 }
                             }
                             .frame(height: 50)
+                            .background {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(ringColor.opacity(isExpanded && selectedControlRow == 0 ? 0.5 : 0))
+                            }
+                            .contentShape(Rectangle())
                             
                             // Brush thickness
                             HStack(spacing: 12) {
@@ -175,6 +187,11 @@ struct DynamicIslandTest: View {
                                 CirclePreview(circleSize: BrushThickeness, circleOpacity: 1)
                             }
                             .padding(.horizontal, 12)
+                            .background {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(ringColor.opacity(selectedControlRow == 1 ? 0.5 : 0))
+                            }
+                            .contentShape(Rectangle())
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
@@ -191,6 +208,11 @@ struct DynamicIslandTest: View {
                                 CirclePreview(circleSize: 20, circleOpacity: BrushOpacity)
                             }
                             .padding(.horizontal, 12)
+                            .background {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(ringColor.opacity(selectedControlRow == 2 ? 0.5 : 0))
+                            }
+                            .contentShape(Rectangle())
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
@@ -212,6 +234,65 @@ struct DynamicIslandTest: View {
                 }
             }
             .statusBarHidden(true)
+            .sensoryFeedback(.selection, trigger: selectedControlRow)
+            .sensoryFeedback(.selection, trigger: horizontalHapticTick)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in
+                        guard isExpanded else { return }
+
+                        let translation = value.translation
+                        let deltaX = translation.width - previousDragTranslation.width
+
+                        if dragAxis == 0 {
+                            if abs(translation.width) > 8, abs(translation.width) > abs(translation.height) {
+                                dragAxis = 1
+                            } else if abs(translation.height) > 8, abs(translation.height) > abs(translation.width) {
+                                dragAxis = 2
+                            }
+                        }
+
+                        if dragAxis == 2,
+                           abs(translation.height) >= 30,
+                           !verticalSelectionApplied {
+                            let direction = translation.height > 0 ? 1 : -1
+                            selectedControlRow = (selectedControlRow + direction + 3) % 3
+                            verticalSelectionApplied = true
+                        } else if dragAxis == 1 {
+                            if selectedControlRow == 0 {
+                                brushSwipeRemainder += deltaX
+                                if abs(brushSwipeRemainder) >= 40 {
+                                    let brushDirection = brushSwipeRemainder < 0 ? 1 : -1
+                                    let currentIndex = BrushList.firstIndex(of: selectedBrush ?? "Marker") ?? 0
+                                    let nextIndex = min(BrushList.count - 1, max(0, currentIndex + brushDirection))
+                                    selectedBrush = BrushList[nextIndex]
+                                    brushSwipeRemainder = 0
+                                }
+                            } else {
+                                if selectedControlRow == 1 {
+                                    BrushThickeness = min(45, max(0, BrushThickeness + deltaX * 0.45))
+                                } else {
+                                    BrushOpacity = min(1, max(0, BrushOpacity + deltaX / 200))
+                                }
+
+                                horizontalHapticRemainder += abs(deltaX)
+                                if horizontalHapticRemainder >= 10 {
+                                    horizontalHapticTick += 1
+                                    horizontalHapticRemainder = 0
+                                }
+                            }
+                        }
+
+                        previousDragTranslation = translation
+                    }
+                    .onEnded { _ in
+                        previousDragTranslation = .zero
+                        verticalSelectionApplied = false
+                        dragAxis = 0
+                        brushSwipeRemainder = 0
+                        horizontalHapticRemainder = 0
+                    }
+            )
             .onTapGesture(count: 3) {
                 
                 print("Clicked")
