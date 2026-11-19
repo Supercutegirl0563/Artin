@@ -19,6 +19,10 @@ struct DynamicIslandTest: View {
     
     @State private var HapticPlaying: Bool = false
     
+    @State private var BrushThickeness: Double = 45
+    
+    @State private var BrushOpacity: Double = 0.5
+    
     var body: some View {
         
         GeometryReader { geo in
@@ -82,11 +86,14 @@ struct DynamicIslandTest: View {
                         
                         // Content inside Dynamic Island
                         VStack(spacing: 8) {
+                            
+                            // Brush selection
+                            
                             GeometryReader { outerGeo in
                                 let itemWidth = outerGeo.size.width / 3
                                 let edgePadding = max(0, (outerGeo.size.width - itemWidth) / 2)
                                 let centerPoint = outerGeo.frame(in: .global).midX
-
+                                
                                 ScrollViewReader { proxy in
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: 0) {
@@ -94,14 +101,14 @@ struct DynamicIslandTest: View {
                                                 GeometryReader { itemGeo in
                                                     let itemMidX = itemGeo.frame(in: .global).midX
                                                     let isCentered = abs(centerPoint - itemMidX) < (itemWidth / 2)
-
+                                                    
                                                     Text(brush)
                                                         .font(.body)
-                                                        // Instant font weight and color (no animation wrapper delaying the swap)
+                                                    // Instant font weight and color (no animation wrapper delaying the swap)
                                                         .fontWeight(isCentered ? .bold : .regular)
                                                         .foregroundStyle(isCentered ? .yellow : .white.opacity(0.6))
                                                         .frame(width: itemWidth, height: 50)
-                                                        // GPU-driven scale that tracks finger movement at 120fps with zero lag
+                                                    // GPU-driven scale that tracks finger movement at 120fps with zero lag
                                                         .visualEffect { content, proxy in
                                                             let frame = proxy.frame(in: .scrollView)
                                                             let scrollMidX = proxy.bounds(of: .scrollView)?.midX ?? 0
@@ -153,10 +160,39 @@ struct DynamicIslandTest: View {
                                 }
                             }
                             .frame(height: 50)
-
-
-
-
+                            
+                            // Brush thickness
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Thickness")
+                                        .font(.caption)
+                                        .foregroundStyle(.white)
+                                    
+                                    Slider(value: $BrushThickeness, in: 0...45)
+                                        .tint(.yellow)
+                                }
+                                
+                                CirclePreview(circleSize: BrushThickeness, circleOpacity: 1)
+                            }
+                            .padding(.horizontal, 12)
+                            .opacity(isExpanded ? 1 : 0)
+                            .disabled(!isExpanded)
+                            
+                            // Brush opacity
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Opacity")
+                                        .font(.caption)
+                                        .foregroundStyle(.white)
+                                    
+                                    Slider(value: $BrushOpacity, in: 0...1)
+                                        .tint(.yellow)
+                                }
+                                CirclePreview(circleSize: 20, circleOpacity: BrushOpacity)
+                            }
+                            .padding(.horizontal, 12)
+                            .opacity(isExpanded ? 1 : 0)
+                            .disabled(!isExpanded)
                             
                         }
                         .frame(
@@ -186,6 +222,22 @@ struct DynamicIslandTest: View {
             }
         }
         .ignoresSafeArea()
+    }
+}
+
+private struct CirclePreview: View {
+    let circleSize: CGFloat
+    let circleOpacity: Double
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color.white.opacity(0.15))
+            .frame(width: 48, height: 48)
+            .overlay {
+                Circle()
+                    .fill(Color.white.opacity(circleOpacity))
+                    .frame(width: circleSize, height: circleSize)
+            }
     }
 }
 
