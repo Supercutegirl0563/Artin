@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 import NotchMyProblem
 
 struct DynamicIslandTest: View {
@@ -22,6 +23,7 @@ struct DynamicIslandTest: View {
     @State private var BrushThickeness: Double = 45
     
     @State private var BrushOpacity: Double = 0.5
+    
     @State private var selectedControlRow = 0
     @State private var previousDragTranslation = CGSize.zero
     @State private var verticalSelectionApplied = false
@@ -29,6 +31,10 @@ struct DynamicIslandTest: View {
     @State private var brushSwipeRemainder: CGFloat = 0
     @State private var horizontalHapticRemainder: CGFloat = 0
     @State private var horizontalHapticTick = 0
+    @State private var isColorPickerPresented = false
+    @State private var pickerHue = 0.0
+    @State private var colorPickerHapticTick = 0
+    @State private var selectedColorRGB = RGBColor(red: 1, green: 0, blue: 0)
     
     var body: some View {
         
@@ -49,8 +55,8 @@ struct DynamicIslandTest: View {
                     let lineWidth: CGFloat = 8
                     let padding: CGFloat = 1
                     
-                    let width = rect.width + padding * 2 + (isExpanded ? 100 : 0)
-                    let height = rect.height + padding * 2 + (isExpanded ? 280 : 0)
+                    let width = rect.width + padding * 2 + (isExpanded && !isColorPickerPresented ? 100 : 0)
+                    let height = rect.height + padding * 2 + (isExpanded && !isColorPickerPresented ? 280 : 0)
                     
                     let ringColor = Color(
                         red: 45.0 / 255.0,
@@ -90,6 +96,12 @@ struct DynamicIslandTest: View {
                                 radius: 8,
                                 y: 5
                             )
+                            .overlay {
+                                if isColorPickerPresented {
+                                    ColorPickerRing(hue: pickerHue)
+                                        .frame(width: 220, height: 220)
+                                }
+                            }
                         
                         // Content inside Dynamic Island
                         VStack(spacing: 8) {
@@ -180,11 +192,11 @@ struct DynamicIslandTest: View {
                                         .font(.caption)
                                         .foregroundStyle(.white)
                                     
-                                    Slider(value: $BrushThickeness, in: 0...45)
+                                    Slider(value: $BrushThickeness, in: 0...70)
                                         .tint(.yellow)
                                 }
                                 
-                                CirclePreview(circleSize: BrushThickeness, circleOpacity: 1)
+//                                CirclePreview(circleSize: BrushThickeness, circleOpacity: 1)
                             }
                             .padding(.horizontal, 12)
                             .background {
@@ -205,7 +217,7 @@ struct DynamicIslandTest: View {
                                     Slider(value: $BrushOpacity, in: 0...1)
                                         .tint(.yellow)
                                 }
-                                CirclePreview(circleSize: 20, circleOpacity: BrushOpacity)
+//                                CirclePreview(circleSize: BrushThickeness, circleOpacity: BrushOpacity)
                             }
                             .padding(.horizontal, 12)
                             .background {
@@ -216,12 +228,32 @@ struct DynamicIslandTest: View {
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
+                            CirclePreview(
+                                circleSize: BrushThickeness,
+                                circleOpacity: BrushOpacity,
+                                circleColor: selectedColorRGB.color
+                            )
+                                .background {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(ringColor.opacity(selectedControlRow == 3 ? 0.5 : 0))
+                                }
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedControlRow = 3
+                                    isExpanded = false
+                                    isColorPickerPresented = true
+                                }
+                                .opacity(isExpanded ? 1 : 0)
+                                .disabled(!isExpanded)
+                            
+                            
                         }
                         .frame(
                             width: width - 10,
                             height: height - 10
                         )
                         .multilineTextAlignment(.center)
+                        .opacity(isColorPickerPresented ? 0 : 1)
                         .animation(
                             .spring(response: 0.4, dampingFraction: 0.7),
                             value: isExpanded
@@ -236,10 +268,11 @@ struct DynamicIslandTest: View {
             .statusBarHidden(true)
             .sensoryFeedback(.selection, trigger: selectedControlRow)
             .sensoryFeedback(.selection, trigger: horizontalHapticTick)
+            .sensoryFeedback(.selection, trigger: colorPickerHapticTick)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
-                        guard isExpanded else { return }
+                        guard isExpanded || isColorPickerPresented else { return }
 
                         let translation = value.translation
                         let deltaX = translation.width - previousDragTranslation.width
@@ -252,11 +285,20 @@ struct DynamicIslandTest: View {
                             }
                         }
 
-                        if dragAxis == 2,
-                           abs(translation.height) >= 30,
-                           !verticalSelectionApplied {
+                        if isColorPickerPresented {
+                            if dragAxis == 1 {
+                                pickerHue = (pickerHue + Double(deltaX / 300)).wrappedHue
+                                horizontalHapticRemainder += abs(deltaX)
+                                if horizontalHapticRemainder >= 10 {
+                                    colorPickerHapticTick += 1
+                                    horizontalHapticRemainder = 0
+                                }
+                            }
+                        } else if dragAxis == 2,
+                                  abs(translation.height) >= 30,
+                                  !verticalSelectionApplied {
                             let direction = translation.height > 0 ? 1 : -1
-                            selectedControlRow = (selectedControlRow + direction + 3) % 3
+                            selectedControlRow = (selectedControlRow + direction + 4) % 4
                             verticalSelectionApplied = true
                         } else if dragAxis == 1 {
                             if selectedControlRow == 0 {
@@ -270,8 +312,8 @@ struct DynamicIslandTest: View {
                                 }
                             } else {
                                 if selectedControlRow == 1 {
-                                    BrushThickeness = min(45, max(0, BrushThickeness + deltaX * 0.45))
-                                } else {
+                                    BrushThickeness = min(70, max(0, BrushThickeness + deltaX * 0.7))
+                                } else if selectedControlRow == 2 {
                                     BrushOpacity = min(1, max(0, BrushOpacity + deltaX / 200))
                                 }
 
@@ -293,10 +335,33 @@ struct DynamicIslandTest: View {
                         horizontalHapticRemainder = 0
                     }
             )
+            .onTapGesture(count: 2) {
+                guard isColorPickerPresented else { return }
+
+                let color = UIColor(
+                    hue: CGFloat(pickerHue),
+                    saturation: 1,
+                    brightness: 1,
+                    alpha: 1
+                )
+                var red: CGFloat = 0
+                var green: CGFloat = 0
+                var blue: CGFloat = 0
+                color.getRed(&red, green: &green, blue: &blue, alpha: nil)
+                selectedColorRGB = RGBColor(
+                    red: Double(red),
+                    green: Double(green),
+                    blue: Double(blue)
+                )
+
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    isColorPickerPresented = false
+                    isExpanded = true
+                }
+            }
             .onTapGesture(count: 3) {
-                
-                print("Clicked")
-                
+                guard !isColorPickerPresented else { return }
+
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     isExpanded.toggle()
                 }
@@ -309,16 +374,61 @@ struct DynamicIslandTest: View {
 private struct CirclePreview: View {
     let circleSize: CGFloat
     let circleOpacity: Double
+    let circleColor: Color
     
     var body: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .offset(y: 10)
             .fill(Color.white.opacity(0.15))
-            .frame(width: 48, height: 48)
+            .frame(width: 70, height: 70)
             .overlay {
                 Circle()
-                    .fill(Color.white.opacity(circleOpacity))
+                    .fill(circleColor.opacity(circleOpacity))
                     .frame(width: circleSize, height: circleSize)
+                    .offset(y: 10)
             }
+    }
+}
+
+private struct ColorPickerRing: View {
+    let hue: Double
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 18, lineCap: .round)
+                )
+
+            Capsule()
+                .fill(.white)
+                .frame(width: 5, height: 28)
+                .shadow(color: .black.opacity(0.8), radius: 3)
+                .offset(y: -101)
+                .rotationEffect(.degrees(hue * 360))
+        }
+        .frame(width: 220, height: 220)
+    }
+}
+
+private struct RGBColor {
+    let red: Double
+    let green: Double
+    let blue: Double
+
+    var color: Color {
+        Color(red: red, green: green, blue: blue)
+    }
+}
+
+private extension Double {
+    var wrappedHue: Double {
+        let remainder = truncatingRemainder(dividingBy: 1)
+        return remainder >= 0 ? remainder : remainder + 1
     }
 }
 
