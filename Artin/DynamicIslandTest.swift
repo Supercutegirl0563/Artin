@@ -56,7 +56,7 @@ struct DynamicIslandTest: View {
                     let padding: CGFloat = 1
                     
                     let width = rect.width + padding * 2 + (isExpanded ? 220 : 0)
-                    let height = rect.height + padding * 2 + (isExpanded ? 300 : 0)
+                    let height = rect.height + padding * 2 + (isExpanded ? 340 : 0)
                     
                     let ringColor = Color.white.opacity(0.2)
                     
@@ -173,6 +173,9 @@ struct DynamicIslandTest: View {
                             }
                             .frame(height: 48)
                             .background(Color.white.opacity(0.14), in: Capsule())
+                            .overlay {
+                                selectionRectangle(for: 0)
+                            }
                             .contentShape(Capsule())
                             
                             // Brush thickness
@@ -192,6 +195,10 @@ struct DynamicIslandTest: View {
                                 }
                             }
                             .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background {
+                                selectionRectangle(for: 1)
+                            }
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
@@ -213,6 +220,10 @@ struct DynamicIslandTest: View {
 
                             }
                             .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background {
+                                selectionRectangle(for: 2)
+                            }
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
@@ -273,6 +284,11 @@ struct DynamicIslandTest: View {
                                 .frame(maxWidth: .infinity)
                             }
                             .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background {
+                                selectionRectangle(for: 3)
+                                    .offset(y: 10)
+                            }
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
@@ -374,6 +390,17 @@ struct DynamicIslandTest: View {
             }
         }
         .ignoresSafeArea()
+    }
+    
+    private func selectionRectangle(for row: Int) -> some View {
+        let isSelected = isExpanded && selectedControlRow == row
+        
+        return RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.blue.opacity(isSelected ? 0.28 : 0))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.blue.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
+            }
     }
 }
 
