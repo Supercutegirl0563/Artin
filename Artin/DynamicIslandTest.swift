@@ -7,7 +7,6 @@
 //
 
 import SwiftUI
-import UIKit
 import NotchMyProblem
 
 struct DynamicIslandTest: View {
@@ -98,8 +97,10 @@ struct DynamicIslandTest: View {
                             )
                             .overlay {
                                 if isColorPickerPresented {
-                                    ColorPickerRing(hue: pickerHue)
-                                        .frame(width: 220, height: 220)
+                                    ColorPickerRing(
+                                        hue: pickerHue,
+                                        size: CGSize(width: width + 35, height: height + 35)
+                                    )
                                 }
                             }
                         
@@ -239,11 +240,6 @@ struct DynamicIslandTest: View {
                                         .fill(ringColor.opacity(selectedControlRow == 3 ? 0.5 : 0))
                                 }
                                 .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedControlRow = 3
-                                    isExpanded = false
-                                    isColorPickerPresented = true
-                                }
                                 .opacity(isExpanded ? 1 : 0)
                                 .disabled(!isExpanded)
                             
@@ -335,24 +331,19 @@ struct DynamicIslandTest: View {
                         horizontalHapticRemainder = 0
                     }
             )
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    guard isExpanded, selectedControlRow == 3 else { return }
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        isExpanded = false
+                        isColorPickerPresented = true
+                    }
+                }
+            )
             .onTapGesture(count: 2) {
                 guard isColorPickerPresented else { return }
 
-                let color = UIColor(
-                    hue: CGFloat(pickerHue),
-                    saturation: 1,
-                    brightness: 1,
-                    alpha: 1
-                )
-                var red: CGFloat = 0
-                var green: CGFloat = 0
-                var blue: CGFloat = 0
-                color.getRed(&red, green: &green, blue: &blue, alpha: nil)
-                selectedColorRGB = RGBColor(
-                    red: Double(red),
-                    green: Double(green),
-                    blue: Double(blue)
-                )
+                selectedColorRGB = RGBColor(hue: pickerHue)
 
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     isColorPickerPresented = false
@@ -392,26 +383,106 @@ private struct CirclePreview: View {
 
 private struct ColorPickerRing: View {
     let hue: Double
+    let size: CGSize
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(
-                    AngularGradient(
-                        colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red],
-                        center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: 18, lineCap: .round)
-                )
+        GeometryReader { geometry in
+            let ringRect = CGRect(origin: .zero, size: geometry.size)
+                .insetBy(dx: 8, dy: 8)
+            let ringPath = RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .path(in: ringRect)
+            let marker = markerPosition(for: hue, in: ringRect)
 
-            Capsule()
-                .fill(.white)
-                .frame(width: 5, height: 28)
-                .shadow(color: .black.opacity(0.8), radius: 3)
-                .offset(y: -101)
-                .rotationEffect(.degrees(hue * 360))
+            ZStack(alignment: .topLeading) {
+                Canvas { context, _ in
+                    let segmentCount = 360
+                    for segment in 0..<segmentCount {
+                        let start = CGFloat(segment) / CGFloat(segmentCount)
+                        let end = CGFloat(segment + 1) / CGFloat(segmentCount)
+                        let segmentPath = ringPath.trimmedPath(from: start, to: end)
+                        let segmentHue = Double(segment) / Double(segmentCount)
+                        context.stroke(
+                            segmentPath,
+                            with: .color(Color(hue: segmentHue, saturation: 1, brightness: 1)),
+                            lineWidth: 14
+                        )
+                    }
+                }
+
+                Capsule()
+                    .fill(.white)
+                    .frame(width: 5, height: 22)
+                    .shadow(color: .black.opacity(0.8), radius: 3)
+                    .rotationEffect(.degrees(marker.angle))
+                    .position(marker.point)
+            }
         }
-        .frame(width: 220, height: 220)
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func markerPosition(
+        for hue: Double,
+        in rect: CGRect
+    ) -> (point: CGPoint, angle: Double) {
+        let radius = min(28, min(rect.width, rect.height) / 2)
+        let topLength = rect.width - 2 * radius
+        let sideLength = rect.height - 2 * radius
+        let cornerLength = Double.pi * radius / 2
+        let perimeter = 2 * (topLength + sideLength) + 4 * cornerLength
+        var distance = hue * perimeter
+
+        if distance < topLength {
+            return (CGPoint(x: rect.minX + radius + distance, y: rect.minY), 0)
+        }
+        distance -= topLength
+
+        if distance < cornerLength {
+            let angle = -Double.pi / 2 + distance / radius
+            return (
+                CGPoint(x: rect.maxX - radius + radius * cos(angle), y: rect.minY + radius + radius * sin(angle)),
+                (angle * 180 / Double.pi) + 90
+            )
+        }
+        distance -= cornerLength
+
+        if distance < sideLength {
+            return (CGPoint(x: rect.maxX, y: rect.minY + radius + distance), 90)
+        }
+        distance -= sideLength
+
+        if distance < cornerLength {
+            let angle = distance / radius
+            return (
+                CGPoint(x: rect.maxX - radius + radius * cos(angle), y: rect.maxY - radius + radius * sin(angle)),
+                (angle * 180 / Double.pi) + 90
+            )
+        }
+        distance -= cornerLength
+
+        if distance < topLength {
+            return (CGPoint(x: rect.maxX - radius - distance, y: rect.maxY), 180)
+        }
+        distance -= topLength
+
+        if distance < cornerLength {
+            let angle = Double.pi / 2 + distance / radius
+            return (
+                CGPoint(x: rect.minX + radius + radius * cos(angle), y: rect.maxY - radius + radius * sin(angle)),
+                (angle * 180 / Double.pi) + 90
+            )
+        }
+        distance -= cornerLength
+
+        if distance < sideLength {
+            return (CGPoint(x: rect.minX, y: rect.maxY - radius - distance), 270)
+        }
+        distance -= sideLength
+
+        let angle = Double.pi + distance / radius
+        return (
+            CGPoint(x: rect.minX + radius + radius * cos(angle), y: rect.minY + radius + radius * sin(angle)),
+            (angle * 180 / Double.pi) + 90
+        )
     }
 }
 
@@ -419,6 +490,32 @@ private struct RGBColor {
     let red: Double
     let green: Double
     let blue: Double
+
+    init(red: Double, green: Double, blue: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+
+    init(hue: Double) {
+        let scaledHue = hue.wrappedHue * 6
+        let x = 1 - abs(scaledHue.truncatingRemainder(dividingBy: 2) - 1)
+
+        switch Int(scaledHue) {
+        case 0:
+            (red, green, blue) = (1, x, 0)
+        case 1:
+            (red, green, blue) = (x, 1, 0)
+        case 2:
+            (red, green, blue) = (0, 1, x)
+        case 3:
+            (red, green, blue) = (0, x, 1)
+        case 4:
+            (red, green, blue) = (x, 0, 1)
+        default:
+            (red, green, blue) = (1, 0, x)
+        }
+    }
 
     var color: Color {
         Color(red: red, green: green, blue: blue)
