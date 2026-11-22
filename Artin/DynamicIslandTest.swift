@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 import NotchMyProblem
 
 struct DynamicIslandTest: View {
@@ -24,15 +25,21 @@ struct DynamicIslandTest: View {
     @State private var BrushOpacity: Double = 0.85
     
     @State private var selectedControlRow = 0
+    @State private var controlRowFrames: [Int: CGRect] = [:]
+    @State private var activeGestureRow: Int?
     @State private var previousDragTranslation = CGSize.zero
     @State private var verticalSelectionApplied = false
     @State private var dragAxis = 0
     @State private var brushSwipeRemainder: CGFloat = 0
     @State private var horizontalHapticRemainder: CGFloat = 0
     @State private var horizontalHapticTick = 0
+    @State private var paletteSelectionHapticTick = 0
+    @State private var isShowingAppleColorPicker = false
+    @State private var didChangeCustomColor = false
     @State private var selectedBrushColor: Color = .blue
     @State private var paletteColors: [Color] = [.yellow, .cyan, .pink, .green, .white]
-    @State private var selectedPaletteIndex = -1
+    @State private var selectedPaletteIndex = 0
+    @State private var isCustomColorSelected = false
     @State private var paletteSwipeRemainder: CGFloat = 0
     @State private var newPaletteColor: Color = .blue
     
@@ -111,29 +118,12 @@ struct DynamicIslandTest: View {
                                                     let itemMidX = itemGeo.frame(in: .global).midX
                                                     let isCentered = abs(centerPoint - itemMidX) < (itemWidth / 2)
                                                     
-                                                    HStack(spacing: 5) {
-                                                        Image(systemName: brush == "Eraser" ? "eraser.fill" : (brush == "Marker" ? "highlighter" : "pencil") )
-                                                        Text(brush)
+                                                    BrushOptionView(brush: brush, isCentered: isCentered, itemWidth: itemWidth) {
+                                                        selectedControlRow = 0
+                                                        withAnimation(.snappy(duration: 0.25)) {
+                                                            selectedBrush = brush
+                                                        }
                                                     }
-                                                        .font(.body)
-                                                        .fontWeight(isCentered ? .semibold : .regular)
-                                                        .foregroundStyle(isCentered ? .black : .white.opacity(0.65))
-                                                        .frame(width: itemWidth, height: 44)
-                                                        .background(isCentered ? Color.yellow : Color.clear, in: Capsule())
-                                                    // GPU-driven scale that tracks finger movement at 120fps with zero lag
-                                                        .visualEffect { content, proxy in
-                                                            let frame = proxy.frame(in: .scrollView)
-                                                            let scrollMidX = proxy.bounds(of: .scrollView)?.midX ?? 0
-                                                            let distance = abs(scrollMidX - frame.midX)
-                                                            let progress = max(0, 1 - (distance / itemWidth))
-                                                            return content.scaleEffect(1.0 + (0.15 * progress))
-                                                        }
-                                                        .contentShape(Rectangle())
-                                                        .onTapGesture {
-                                                            withAnimation(.snappy(duration: 0.25)) {
-                                                                selectedBrush = brush
-                                                            }
-                                                        }
                                                 }
                                                 .frame(width: itemWidth, height: 50)
                                                 .id(brush)
@@ -175,10 +165,11 @@ struct DynamicIslandTest: View {
                             .background(Color.white.opacity(0.14), in: Capsule())
                             .overlay {
                                 selectionRectangle(for: 0)
-                                    .padding(.horizontal, -6)
-                                    .padding(.vertical, -5)
+//                                    .padding(.horizontal, -6)
+//                                    .padding(.vertical, -5)
                             }
                             .contentShape(Capsule())
+                            .background(controlRowFrame(for: 0))
                             
                             // Brush thickness
                             HStack(spacing: 12) {
@@ -192,8 +183,12 @@ struct DynamicIslandTest: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.white)
 
-                                    Slider(value: $BrushThickeness, in: 1...70)
-                                        .tint(.yellow)
+                                    Slider(value: $BrushThickeness, in: 1...70, onEditingChanged: { isEditing in
+                                        if isEditing {
+                                            selectedControlRow = 1
+                                        }
+                                    })
+                                    .tint(.yellow)
                                 }
                             }
                             .padding(.horizontal, 12)
@@ -203,6 +198,7 @@ struct DynamicIslandTest: View {
                             }
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
+                            .background(controlRowFrame(for: 1))
                             
                             // Brush opacity
                             HStack(spacing: 12) {
@@ -216,8 +212,12 @@ struct DynamicIslandTest: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.white)
 
-                                    Slider(value: $BrushOpacity, in: 0...1)
-                                        .tint(.yellow)
+                                    Slider(value: $BrushOpacity, in: 0...1, onEditingChanged: { isEditing in
+                                        if isEditing {
+                                            selectedControlRow = 2
+                                        }
+                                    })
+                                    .tint(.yellow)
                                 }
 
                             }
@@ -228,7 +228,8 @@ struct DynamicIslandTest: View {
                             }
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
-                            
+                            .background(controlRowFrame(for: 2))
+                            // Preview
                             HStack(spacing: 12) {
                                 BrushStrokePreview(
                                     color: selectedBrushColor,
@@ -236,52 +237,68 @@ struct DynamicIslandTest: View {
                                     thickness: BrushThickeness
                                 )
                                 .frame(width: 80, height: 80)
-
+                                // Color palette and custom color picker
                                 VStack(spacing: 12) {
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: 6) {
                                             ForEach(paletteColors.indices, id: \.self) { index in
                                                 Button {
+                                                    selectedControlRow = 3
+                                                    if selectedPaletteIndex != index || isCustomColorSelected {
+                                                        paletteSelectionHapticTick += 1
+                                                    }
                                                     selectedPaletteIndex = index
+                                                    isCustomColorSelected = false
                                                     selectedBrushColor = paletteColors[index]
                                                 } label: {
                                                     Circle()
                                                         .fill(paletteColors[index])
                                                         .frame(width: 28, height: 28)
+                                                        .overlay {
+                                                            Circle()
+                                                                .stroke(
+                                                                    Color.blue.opacity(!isCustomColorSelected && selectedPaletteIndex == index ? 1 : 0),
+                                                                    lineWidth: 3
+                                                                )
+                                                                .padding(-4)
+                                                        }
                                                 }
                                                 .buttonStyle(.plain)
+                                                .padding(.vertical, 7)
                                             }
                                         }
                                     }
-                                    .frame(maxWidth: 164)
+                                    .frame(maxWidth: 180)
 
-                                    ColorPicker("Add custom color", selection: $newPaletteColor, supportsOpacity: false)
-                                        .labelsHidden()
-                                        .opacity(0.02)
-                                        .overlay {
-                                            ZStack {
-                                                Circle()
-                                                    .stroke(
-                                                        AngularGradient(
-                                                            colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red],
-                                                            center: .center
-                                                        ),
-                                                        lineWidth: 4
-                                                    )
-                                                    .frame(width: 36, height: 36)
-                                                Image(systemName: "plus")
-                                                    .font(.system(size: 18, weight: .medium))
-                                                    .foregroundStyle(.white)
-                                            }
-                                            .allowsHitTesting(false)
+                                    Button {
+                                        selectedControlRow = 3
+                                        isCustomColorSelected = true
+                                        isShowingAppleColorPicker = true
+                                    } label: {
+                                        ZStack {
+                                            Circle()
+                                                .stroke(
+                                                    AngularGradient(
+                                                        colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red],
+                                                        center: .center
+                                                    ),
+                                                    lineWidth: 4
+                                                )
+                                                .frame(width: 36, height: 36)
+                                            Circle()
+                                                .stroke(
+                                                    Color.blue.opacity(isCustomColorSelected ? 1 : 0),
+                                                    lineWidth: 3
+                                                )
+                                                .frame(width: 44, height: 44)
+                                            Image(systemName: "plus")
+                                                .font(.system(size: 18, weight: .medium))
+                                                .foregroundStyle(.white)
                                         }
-                                        .frame(width: 36, height: 36)
-                                        .accessibilityLabel("Add custom color")
-                                        .onChange(of: newPaletteColor) { _, newColor in
-                                            selectedBrushColor = newColor
-                                            paletteColors.append(newColor)
-                                            selectedPaletteIndex = paletteColors.count - 1
-                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .frame(width: 44, height: 44)
+                                    .accessibilityLabel("Add custom color")
                                 }
                                 .frame(maxWidth: .infinity)
                             }
@@ -295,6 +312,7 @@ struct DynamicIslandTest: View {
                             }
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
+                            .background(controlRowFrame(for: 3))
                             
                         }
                         .frame(
@@ -313,11 +331,27 @@ struct DynamicIslandTest: View {
                     )
                 }
             }
+            .coordinateSpace(name: "toolboxRows")
+            .onPreferenceChange(ControlRowFramesKey.self) { controlRowFrames = $0 }
             .statusBarHidden(true)
-            .sensoryFeedback(.selection, trigger: selectedControlRow)
+            .sensoryFeedback(.selection, trigger: selectedControlRow) { oldValue, newValue in
+                oldValue != newValue && newValue != 3
+            }
+            .sensoryFeedback(.selection, trigger: paletteSelectionHapticTick)
             .sensoryFeedback(.selection, trigger: horizontalHapticTick)
             .simultaneousGesture(
-                DragGesture(minimumDistance: 8)
+                TapGesture().onEnded {
+                    if isExpanded, selectedControlRow == 3, isCustomColorSelected {
+                        isShowingAppleColorPicker = true
+                    }
+                }
+            )
+            .onChange(of: newPaletteColor) { _, newColor in
+                selectedBrushColor = newColor
+                didChangeCustomColor = true
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8, coordinateSpace: .named("toolboxRows"))
                     .onChanged { value in
                         guard isExpanded else { return }
 
@@ -325,6 +359,13 @@ struct DynamicIslandTest: View {
                         let deltaX = translation.width - previousDragTranslation.width
 
                         if dragAxis == 0 {
+                            activeGestureRow = controlRowFrames.first {
+                                $0.value.contains(value.startLocation)
+                            }?.key
+                            if let activeGestureRow {
+                                selectedControlRow = activeGestureRow
+                            }
+
                             if abs(translation.width) > 8, abs(translation.width) > abs(translation.height) {
                                 dragAxis = 1
                             } else if abs(translation.height) > 8, abs(translation.height) > abs(translation.width) {
@@ -336,10 +377,23 @@ struct DynamicIslandTest: View {
                            abs(translation.height) >= 30,
                            !verticalSelectionApplied {
                             let direction = translation.height > 0 ? 1 : -1
-                            selectedControlRow = (selectedControlRow + direction + 4) % 4
+                            if selectedControlRow == 3, direction > 0, !isCustomColorSelected {
+                                isCustomColorSelected = true
+                            } else if selectedControlRow == 3, direction < 0, isCustomColorSelected {
+                                isCustomColorSelected = false
+                            } else {
+                                selectedControlRow = (selectedControlRow + direction + 4) % 4
+                                if selectedControlRow == 3,
+                                   selectedPaletteIndex < 0,
+                                   !isCustomColorSelected {
+                                    selectedPaletteIndex = 0
+                                }
+                            }
                             verticalSelectionApplied = true
                         } else if dragAxis == 1 {
-                            if selectedControlRow == 0 {
+                            let activeRow = activeGestureRow ?? selectedControlRow
+                            selectedControlRow = activeRow
+                            if activeRow == 0 {
                                 brushSwipeRemainder += deltaX
                                 if abs(brushSwipeRemainder) >= 40 {
                                     let brushDirection = brushSwipeRemainder < 0 ? 1 : -1
@@ -348,28 +402,36 @@ struct DynamicIslandTest: View {
                                     selectedBrush = BrushList[nextIndex]
                                     brushSwipeRemainder = 0
                                 }
-                            } else if selectedControlRow == 1 {
+                            } else if activeRow == 1 {
                                 BrushThickeness = min(70, max(1, BrushThickeness + deltaX * 0.7))
-                            } else if selectedControlRow == 2 {
+                            } else if activeRow == 2 {
                                 BrushOpacity = min(1, max(0, BrushOpacity + deltaX / 200))
                             } else {
                                 paletteSwipeRemainder += deltaX
                                 if abs(paletteSwipeRemainder) >= 40 {
                                     let paletteDirection = paletteSwipeRemainder < 0 ? 1 : -1
-                                    if selectedPaletteIndex < 0 {
+                                    let previousPaletteIndex = selectedPaletteIndex
+                                    let wasCustomColorSelected = isCustomColorSelected
+                                    if isCustomColorSelected {
                                         selectedPaletteIndex = paletteDirection > 0 ? 0 : paletteColors.count - 1
+                                    } else if selectedPaletteIndex < 0 {
+                                        selectedPaletteIndex = 0
                                     } else {
                                         selectedPaletteIndex = min(
                                             paletteColors.count - 1,
                                             max(0, selectedPaletteIndex + paletteDirection)
                                         )
                                     }
+                                    isCustomColorSelected = false
                                     selectedBrushColor = paletteColors[selectedPaletteIndex]
+                                    if wasCustomColorSelected || previousPaletteIndex != selectedPaletteIndex {
+                                        paletteSelectionHapticTick += 1
+                                    }
                                     paletteSwipeRemainder = 0
                                 }
                             }
 
-                            if selectedControlRow != 0 {
+                            if activeRow == 1 || activeRow == 2 {
                                 horizontalHapticRemainder += abs(deltaX)
                                 if horizontalHapticRemainder >= 10 {
                                     horizontalHapticTick += 1
@@ -384,6 +446,7 @@ struct DynamicIslandTest: View {
                         previousDragTranslation = .zero
                         verticalSelectionApplied = false
                         dragAxis = 0
+                        activeGestureRow = nil
                         brushSwipeRemainder = 0
                         paletteSwipeRemainder = 0
                         horizontalHapticRemainder = 0
@@ -396,17 +459,126 @@ struct DynamicIslandTest: View {
             }
         }
         .ignoresSafeArea()
+        .sheet(isPresented: $isShowingAppleColorPicker, onDismiss: finishCustomColorSelection) {
+            AppleColorPicker(color: $newPaletteColor)
+                .ignoresSafeArea()
+        }
     }
     
+    private func finishCustomColorSelection() {
+        selectedBrushColor = newPaletteColor
+        if didChangeCustomColor {
+            paletteColors.append(newPaletteColor)
+        }
+        isCustomColorSelected = true
+        didChangeCustomColor = false
+    }
+    
+    private func controlRowFrame(for row: Int) -> some View {
+        GeometryReader { geometry in
+            Color.clear.preference(
+                key: ControlRowFramesKey.self,
+                value: [row: geometry.frame(in: .named("toolboxRows"))]
+            )
+        }
+    }
+    
+    @ViewBuilder
     private func selectionRectangle(for row: Int) -> some View {
         let isSelected = isExpanded && selectedControlRow == row
         
-        return RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.blue.opacity(isSelected ? 0 : 0))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.blue.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
-            }
+        if row == 0 {
+            Capsule()
+                .fill(Color.blue.opacity(0))
+                .overlay {
+                    Capsule()
+                        .stroke(Color.blue.opacity(isSelected ? 0.9 : 0), lineWidth: 3)
+                }
+        } else {
+            Rectangle()
+                .fill(Color.blue.opacity(0))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.blue.opacity(isSelected ? 0.9 : 0), lineWidth: 3)
+                }
+        }
+    }
+}
+
+private struct AppleColorPicker: UIViewControllerRepresentable {
+    @Binding var color: Color
+    
+    func makeUIViewController(context: Context) -> UIColorPickerViewController {
+        let controller = UIColorPickerViewController()
+        controller.delegate = context.coordinator
+        controller.supportsAlpha = false
+        controller.selectedColor = UIColor(color)
+        return controller
+    }
+    
+    func updateUIViewController(_ controller: UIColorPickerViewController, context: Context) {
+        let selectedColor = UIColor(color)
+        if !controller.selectedColor.isEqual(selectedColor) {
+            controller.selectedColor = selectedColor
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(color: $color)
+    }
+    
+    @MainActor
+    final class Coordinator: NSObject, UIColorPickerViewControllerDelegate {
+        @Binding private var color: Color
+        
+        init(color: Binding<Color>) {
+            _color = color
+        }
+        
+        func colorPickerViewController(
+            _ viewController: UIColorPickerViewController,
+            didSelect color: UIColor,
+            continuously: Bool
+        ) {
+            self.color = Color(uiColor: color)
+        }
+    }
+}
+
+private struct BrushOptionView: View {
+    let brush: String
+    let isCentered: Bool
+    let itemWidth: CGFloat
+    let onSelect: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: brush == "Eraser" ? "eraser.fill" : (brush == "Marker" ? "highlighter" : "pencil"))
+            Text(brush)
+        }
+        .font(.body)
+        .fontWeight(isCentered ? .semibold : .regular)
+        .foregroundStyle(isCentered ? .black : .white.opacity(0.65))
+        .frame(width: itemWidth, height: 44)
+        .background(isCentered ? Color.yellow : Color.clear, in: Capsule())
+        .padding(.vertical, 2)
+        .visualEffect { content, proxy in
+            let frame = proxy.frame(in: .scrollView)
+            let scrollMidX = proxy.bounds(of: .scrollView)?.midX ?? 0
+            let distance = abs(scrollMidX - frame.midX)
+            let progress = max(0, 1 - distance / itemWidth)
+            return content.scaleEffect(1 + 0.15 * progress)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
+    }
+}
+
+private struct ControlRowFramesKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, newValue in newValue })
     }
 }
 
