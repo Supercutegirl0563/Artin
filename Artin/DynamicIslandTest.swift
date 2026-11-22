@@ -175,6 +175,8 @@ struct DynamicIslandTest: View {
                             .background(Color.white.opacity(0.14), in: Capsule())
                             .overlay {
                                 selectionRectangle(for: 0)
+                                    .padding(.horizontal, -6)
+                                    .padding(.vertical, -5)
                             }
                             .contentShape(Capsule())
                             
@@ -287,6 +289,8 @@ struct DynamicIslandTest: View {
                             .padding(.vertical, 4)
                             .background {
                                 selectionRectangle(for: 3)
+                                    .padding(.horizontal, -6)
+                                    .padding(.vertical, -8)
                                     .offset(y: 10)
                             }
                             .opacity(isExpanded ? 1 : 0)
@@ -365,10 +369,12 @@ struct DynamicIslandTest: View {
                                 }
                             }
 
-                            horizontalHapticRemainder += abs(deltaX)
-                            if horizontalHapticRemainder >= 10 {
-                                horizontalHapticTick += 1
-                                horizontalHapticRemainder = 0
+                            if selectedControlRow != 0 {
+                                horizontalHapticRemainder += abs(deltaX)
+                                if horizontalHapticRemainder >= 10 {
+                                    horizontalHapticTick += 1
+                                    horizontalHapticRemainder = 0
+                                }
                             }
                         }
 
@@ -396,7 +402,7 @@ struct DynamicIslandTest: View {
         let isSelected = isExpanded && selectedControlRow == row
         
         return RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.blue.opacity(isSelected ? 0.28 : 0))
+            .fill(Color.blue.opacity(isSelected ? 0 : 0))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.blue.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
