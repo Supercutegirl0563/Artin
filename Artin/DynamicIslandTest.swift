@@ -19,9 +19,9 @@ struct DynamicIslandTest: View {
     
     @State private var HapticPlaying: Bool = false
     
-    @State private var BrushThickeness: Double = 45
+    @State private var BrushThickeness: Double = 12
     
-    @State private var BrushOpacity: Double = 0.5
+    @State private var BrushOpacity: Double = 0.85
     
     @State private var selectedControlRow = 0
     @State private var previousDragTranslation = CGSize.zero
@@ -30,10 +30,11 @@ struct DynamicIslandTest: View {
     @State private var brushSwipeRemainder: CGFloat = 0
     @State private var horizontalHapticRemainder: CGFloat = 0
     @State private var horizontalHapticTick = 0
-    @State private var isColorPickerPresented = false
-    @State private var pickerHue = 0.0
-    @State private var colorPickerHapticTick = 0
-    @State private var selectedColorRGB = RGBColor(red: 1, green: 0, blue: 0)
+    @State private var selectedBrushColor: Color = .blue
+    @State private var paletteColors: [Color] = [.yellow, .cyan, .pink, .green, .white]
+    @State private var selectedPaletteIndex = -1
+    @State private var paletteSwipeRemainder: CGFloat = 0
+    @State private var newPaletteColor: Color = .blue
     
     var body: some View {
         
@@ -51,17 +52,13 @@ struct DynamicIslandTest: View {
                 
                 if let rect = NotchMyProblem.shared.adjustedExclusionRect {
                     
-                    let lineWidth: CGFloat = 8
+                    let lineWidth: CGFloat = 6
                     let padding: CGFloat = 1
                     
-                    let width = rect.width + padding * 2 + (isExpanded && !isColorPickerPresented ? 100 : 0)
-                    let height = rect.height + padding * 2 + (isExpanded && !isColorPickerPresented ? 280 : 0)
+                    let width = rect.width + padding * 2 + (isExpanded ? 220 : 0)
+                    let height = rect.height + padding * 2 + (isExpanded ? 300 : 0)
                     
-                    let ringColor = Color(
-                        red: 45.0 / 255.0,
-                        green: 105.0 / 255.0,
-                        blue: 210.0 / 255.0
-                    )
+                    let ringColor = Color.white.opacity(0.2)
                     
                     let islandShape = RoundedRectangle(
                         cornerRadius: 22,
@@ -83,7 +80,7 @@ struct DynamicIslandTest: View {
                                 islandShape
                                     .stroke(
                                         ringColor,
-                                        lineWidth: lineWidth - 4
+                                        lineWidth: lineWidth
                                     )
                             }
                             .shadow(
@@ -95,14 +92,6 @@ struct DynamicIslandTest: View {
                                 radius: 8,
                                 y: 5
                             )
-                            .overlay {
-                                if isColorPickerPresented {
-                                    ColorPickerRing(
-                                        hue: pickerHue,
-                                        size: CGSize(width: width + 35, height: height + 35)
-                                    )
-                                }
-                            }
                         
                         // Content inside Dynamic Island
                         VStack(spacing: 8) {
@@ -122,12 +111,15 @@ struct DynamicIslandTest: View {
                                                     let itemMidX = itemGeo.frame(in: .global).midX
                                                     let isCentered = abs(centerPoint - itemMidX) < (itemWidth / 2)
                                                     
-                                                    Text(brush)
+                                                    HStack(spacing: 5) {
+                                                        Image(systemName: brush == "Eraser" ? "eraser.fill" : (brush == "Marker" ? "highlighter" : "pencil") )
+                                                        Text(brush)
+                                                    }
                                                         .font(.body)
-                                                    // Instant font weight and color (no animation wrapper delaying the swap)
-                                                        .fontWeight(isCentered ? .bold : .regular)
-                                                        .foregroundStyle(isCentered ? .yellow : .white.opacity(0.6))
-                                                        .frame(width: itemWidth, height: 50)
+                                                        .fontWeight(isCentered ? .semibold : .regular)
+                                                        .foregroundStyle(isCentered ? .black : .white.opacity(0.65))
+                                                        .frame(width: itemWidth, height: 44)
+                                                        .background(isCentered ? Color.yellow : Color.clear, in: Capsule())
                                                     // GPU-driven scale that tracks finger movement at 120fps with zero lag
                                                         .visualEffect { content, proxy in
                                                             let frame = proxy.frame(in: .scrollView)
@@ -179,69 +171,110 @@ struct DynamicIslandTest: View {
                                     }
                                 }
                             }
-                            .frame(height: 50)
-                            .background {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(ringColor.opacity(isExpanded && selectedControlRow == 0 ? 0.5 : 0))
-                            }
-                            .contentShape(Rectangle())
+                            .frame(height: 48)
+                            .background(Color.white.opacity(0.14), in: Capsule())
+                            .contentShape(Capsule())
                             
                             // Brush thickness
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Thickness")
-                                        .font(.caption)
-                                        .foregroundStyle(.white)
-                                    
-                                    Slider(value: $BrushThickeness, in: 0...70)
+                                    HStack {
+                                        Text("Thickness")
+                                        Spacer()
+                                        Text("\(Int(BrushThickeness)) pt")
+                                            .monospacedDigit()
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white)
+
+                                    Slider(value: $BrushThickeness, in: 1...70)
                                         .tint(.yellow)
                                 }
-                                
-//                                CirclePreview(circleSize: BrushThickeness, circleOpacity: 1)
                             }
                             .padding(.horizontal, 12)
-                            .background {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(ringColor.opacity(selectedControlRow == 1 ? 0.5 : 0))
-                            }
-                            .contentShape(Rectangle())
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
                             // Brush opacity
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Opacity")
-                                        .font(.caption)
-                                        .foregroundStyle(.white)
-                                    
+                                    HStack {
+                                        Text("Opacity")
+                                        Spacer()
+                                        Text("\(Int(BrushOpacity * 100))%")
+                                            .monospacedDigit()
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white)
+
                                     Slider(value: $BrushOpacity, in: 0...1)
                                         .tint(.yellow)
                                 }
 
                             }
                             .padding(.horizontal, 12)
-                            .background {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(ringColor.opacity(selectedControlRow == 2 ? 0.5 : 0))
-                            }
-                            .contentShape(Rectangle())
                             .opacity(isExpanded ? 1 : 0)
                             .disabled(!isExpanded)
                             
-                            CirclePreview(
-                                circleSize: BrushThickeness,
-                                circleOpacity: BrushOpacity,
-                                circleColor: selectedColorRGB.color
-                            )
-                                .background {
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .offset(y: 10)
-                                        .fill(ringColor.opacity(selectedControlRow == 3 ? 0.5 : 0))
+                            HStack(spacing: 12) {
+                                BrushStrokePreview(
+                                    color: selectedBrushColor,
+                                    opacity: BrushOpacity,
+                                    thickness: BrushThickeness
+                                )
+                                .frame(width: 80, height: 80)
+
+                                VStack(spacing: 12) {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 6) {
+                                            ForEach(paletteColors.indices, id: \.self) { index in
+                                                Button {
+                                                    selectedPaletteIndex = index
+                                                    selectedBrushColor = paletteColors[index]
+                                                } label: {
+                                                    Circle()
+                                                        .fill(paletteColors[index])
+                                                        .frame(width: 28, height: 28)
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                        }
+                                    }
+                                    .frame(maxWidth: 164)
+
+                                    ColorPicker("Add custom color", selection: $newPaletteColor, supportsOpacity: false)
+                                        .labelsHidden()
+                                        .opacity(0.02)
+                                        .overlay {
+                                            ZStack {
+                                                Circle()
+                                                    .stroke(
+                                                        AngularGradient(
+                                                            colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red],
+                                                            center: .center
+                                                        ),
+                                                        lineWidth: 4
+                                                    )
+                                                    .frame(width: 36, height: 36)
+                                                Image(systemName: "plus")
+                                                    .font(.system(size: 18, weight: .medium))
+                                                    .foregroundStyle(.white)
+                                            }
+                                            .allowsHitTesting(false)
+                                        }
+                                        .frame(width: 36, height: 36)
+                                        .accessibilityLabel("Add custom color")
+                                        .onChange(of: newPaletteColor) { _, newColor in
+                                            selectedBrushColor = newColor
+                                            paletteColors.append(newColor)
+                                            selectedPaletteIndex = paletteColors.count - 1
+                                        }
                                 }
-                                .contentShape(Rectangle())
-                                .opacity(isExpanded ? 1 : 0)
-                                .disabled(!isExpanded)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .padding(.horizontal, 12)
+                            .opacity(isExpanded ? 1 : 0)
+                            .disabled(!isExpanded)
                             
                         }
                         .frame(
@@ -249,7 +282,6 @@ struct DynamicIslandTest: View {
                             height: height - 10
                         )
                         .multilineTextAlignment(.center)
-                        .opacity(isColorPickerPresented ? 0 : 1)
                         .animation(
                             .spring(response: 0.4, dampingFraction: 0.7),
                             value: isExpanded
@@ -264,11 +296,10 @@ struct DynamicIslandTest: View {
             .statusBarHidden(true)
             .sensoryFeedback(.selection, trigger: selectedControlRow)
             .sensoryFeedback(.selection, trigger: horizontalHapticTick)
-            .sensoryFeedback(.selection, trigger: colorPickerHapticTick)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
-                        guard isExpanded || isColorPickerPresented else { return }
+                        guard isExpanded else { return }
 
                         let translation = value.translation
                         let deltaX = translation.width - previousDragTranslation.width
@@ -281,18 +312,9 @@ struct DynamicIslandTest: View {
                             }
                         }
 
-                        if isColorPickerPresented {
-                            if dragAxis == 1 {
-                                pickerHue = (pickerHue + Double(deltaX / 300)).wrappedHue
-                                horizontalHapticRemainder += abs(deltaX)
-                                if horizontalHapticRemainder >= 10 {
-                                    colorPickerHapticTick += 1
-                                    horizontalHapticRemainder = 0
-                                }
-                            }
-                        } else if dragAxis == 2,
-                                  abs(translation.height) >= 30,
-                                  !verticalSelectionApplied {
+                        if dragAxis == 2,
+                           abs(translation.height) >= 30,
+                           !verticalSelectionApplied {
                             let direction = translation.height > 0 ? 1 : -1
                             selectedControlRow = (selectedControlRow + direction + 4) % 4
                             verticalSelectionApplied = true
@@ -306,18 +328,31 @@ struct DynamicIslandTest: View {
                                     selectedBrush = BrushList[nextIndex]
                                     brushSwipeRemainder = 0
                                 }
+                            } else if selectedControlRow == 1 {
+                                BrushThickeness = min(70, max(1, BrushThickeness + deltaX * 0.7))
+                            } else if selectedControlRow == 2 {
+                                BrushOpacity = min(1, max(0, BrushOpacity + deltaX / 200))
                             } else {
-                                if selectedControlRow == 1 {
-                                    BrushThickeness = min(70, max(0, BrushThickeness + deltaX * 0.7))
-                                } else if selectedControlRow == 2 {
-                                    BrushOpacity = min(1, max(0, BrushOpacity + deltaX / 200))
+                                paletteSwipeRemainder += deltaX
+                                if abs(paletteSwipeRemainder) >= 40 {
+                                    let paletteDirection = paletteSwipeRemainder < 0 ? 1 : -1
+                                    if selectedPaletteIndex < 0 {
+                                        selectedPaletteIndex = paletteDirection > 0 ? 0 : paletteColors.count - 1
+                                    } else {
+                                        selectedPaletteIndex = min(
+                                            paletteColors.count - 1,
+                                            max(0, selectedPaletteIndex + paletteDirection)
+                                        )
+                                    }
+                                    selectedBrushColor = paletteColors[selectedPaletteIndex]
+                                    paletteSwipeRemainder = 0
                                 }
+                            }
 
-                                horizontalHapticRemainder += abs(deltaX)
-                                if horizontalHapticRemainder >= 10 {
-                                    horizontalHapticTick += 1
-                                    horizontalHapticRemainder = 0
-                                }
+                            horizontalHapticRemainder += abs(deltaX)
+                            if horizontalHapticRemainder >= 10 {
+                                horizontalHapticTick += 1
+                                horizontalHapticRemainder = 0
                             }
                         }
 
@@ -328,31 +363,11 @@ struct DynamicIslandTest: View {
                         verticalSelectionApplied = false
                         dragAxis = 0
                         brushSwipeRemainder = 0
+                        paletteSwipeRemainder = 0
                         horizontalHapticRemainder = 0
                     }
             )
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    guard isExpanded, selectedControlRow == 3 else { return }
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        isExpanded = false
-                        isColorPickerPresented = true
-                    }
-                }
-            )
-            .onTapGesture(count: 2) {
-                guard isColorPickerPresented else { return }
-
-                selectedColorRGB = RGBColor(hue: pickerHue)
-
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                    isColorPickerPresented = false
-                    isExpanded = true
-                }
-            }
             .onTapGesture(count: 3) {
-                guard !isColorPickerPresented else { return }
-
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     isExpanded.toggle()
                 }
@@ -362,170 +377,34 @@ struct DynamicIslandTest: View {
     }
 }
 
-private struct CirclePreview: View {
-    let circleSize: CGFloat
-    let circleOpacity: Double
-    let circleColor: Color
-    
-    var body: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .offset(y: 10)
-            .fill(Color.white.opacity(0.15))
-            .frame(width: 70, height: 70)
-            .overlay {
-                Circle()
-                    .fill(circleColor.opacity(circleOpacity))
-                    .frame(width: circleSize, height: circleSize)
-                    .offset(y: 10)
-            }
-    }
-}
-
-private struct ColorPickerRing: View {
-    let hue: Double
-    let size: CGSize
+private struct BrushStrokePreview: View {
+    let color: Color
+    let opacity: Double
+    let thickness: Double
 
     var body: some View {
         GeometryReader { geometry in
-            let ringRect = CGRect(origin: .zero, size: geometry.size)
-                .insetBy(dx: 8, dy: 8)
-            let ringPath = RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .path(in: ringRect)
-            let marker = markerPosition(for: hue, in: ringRect)
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.14))
 
-            ZStack(alignment: .topLeading) {
-                Canvas { context, _ in
-                    let segmentCount = 360
-                    for segment in 0..<segmentCount {
-                        let start = CGFloat(segment) / CGFloat(segmentCount)
-                        let end = CGFloat(segment + 1) / CGFloat(segmentCount)
-                        let segmentPath = ringPath.trimmedPath(from: start, to: end)
-                        let segmentHue = Double(segment) / Double(segmentCount)
-                        context.stroke(
-                            segmentPath,
-                            with: .color(Color(hue: segmentHue, saturation: 1, brightness: 1)),
-                            lineWidth: 14
-                        )
-                    }
+                Canvas { context, size in
+                    var strokePath = Path()
+                    strokePath.move(to: CGPoint(x: size.width * 0.16, y: size.height * 0.79))
+                    strokePath.addCurve(
+                        to: CGPoint(x: size.width * 0.83, y: size.height * 0.20),
+                        control1: CGPoint(x: size.width * 0.28, y: size.height * 0.72),
+                        control2: CGPoint(x: size.width * 0.64, y: size.height * 0.29)
+                    )
+                    context.stroke(
+                        strokePath,
+                        with: .color(color.opacity(opacity)),
+                        style: StrokeStyle(lineWidth: thickness, lineCap: .round, lineJoin: .round)
+                    )
                 }
-
-                Capsule()
-                    .fill(.white)
-                    .frame(width: 5, height: 22)
-                    .shadow(color: .black.opacity(0.8), radius: 3)
-                    .rotationEffect(.degrees(marker.angle))
-                    .position(marker.point)
+                .padding(8)
             }
         }
-        .frame(width: size.width, height: size.height)
-    }
-
-    private func markerPosition(
-        for hue: Double,
-        in rect: CGRect
-    ) -> (point: CGPoint, angle: Double) {
-        let radius = min(28, min(rect.width, rect.height) / 2)
-        let topLength = rect.width - 2 * radius
-        let sideLength = rect.height - 2 * radius
-        let cornerLength = Double.pi * radius / 2
-        let perimeter = 2 * (topLength + sideLength) + 4 * cornerLength
-        var distance = hue * perimeter
-
-        if distance < topLength {
-            return (CGPoint(x: rect.minX + radius + distance, y: rect.minY), 0)
-        }
-        distance -= topLength
-
-        if distance < cornerLength {
-            let angle = -Double.pi / 2 + distance / radius
-            return (
-                CGPoint(x: rect.maxX - radius + radius * cos(angle), y: rect.minY + radius + radius * sin(angle)),
-                (angle * 180 / Double.pi) + 90
-            )
-        }
-        distance -= cornerLength
-
-        if distance < sideLength {
-            return (CGPoint(x: rect.maxX, y: rect.minY + radius + distance), 90)
-        }
-        distance -= sideLength
-
-        if distance < cornerLength {
-            let angle = distance / radius
-            return (
-                CGPoint(x: rect.maxX - radius + radius * cos(angle), y: rect.maxY - radius + radius * sin(angle)),
-                (angle * 180 / Double.pi) + 90
-            )
-        }
-        distance -= cornerLength
-
-        if distance < topLength {
-            return (CGPoint(x: rect.maxX - radius - distance, y: rect.maxY), 180)
-        }
-        distance -= topLength
-
-        if distance < cornerLength {
-            let angle = Double.pi / 2 + distance / radius
-            return (
-                CGPoint(x: rect.minX + radius + radius * cos(angle), y: rect.maxY - radius + radius * sin(angle)),
-                (angle * 180 / Double.pi) + 90
-            )
-        }
-        distance -= cornerLength
-
-        if distance < sideLength {
-            return (CGPoint(x: rect.minX, y: rect.maxY - radius - distance), 270)
-        }
-        distance -= sideLength
-
-        let angle = Double.pi + distance / radius
-        return (
-            CGPoint(x: rect.minX + radius + radius * cos(angle), y: rect.minY + radius + radius * sin(angle)),
-            (angle * 180 / Double.pi) + 90
-        )
-    }
-}
-
-private struct RGBColor {
-    let red: Double
-    let green: Double
-    let blue: Double
-
-    init(red: Double, green: Double, blue: Double) {
-        self.red = red
-        self.green = green
-        self.blue = blue
-    }
-
-    init(hue: Double) {
-        let scaledHue = hue.wrappedHue * 6
-        let x = 1 - abs(scaledHue.truncatingRemainder(dividingBy: 2) - 1)
-
-        switch Int(scaledHue) {
-        case 0:
-            (red, green, blue) = (1, x, 0)
-        case 1:
-            (red, green, blue) = (x, 1, 0)
-        case 2:
-            (red, green, blue) = (0, 1, x)
-        case 3:
-            (red, green, blue) = (0, x, 1)
-        case 4:
-            (red, green, blue) = (x, 0, 1)
-        default:
-            (red, green, blue) = (1, 0, x)
-        }
-    }
-
-    var color: Color {
-        Color(red: red, green: green, blue: blue)
-    }
-}
-
-private extension Double {
-    var wrappedHue: Double {
-        let remainder = truncatingRemainder(dividingBy: 1)
-        return remainder >= 0 ? remainder : remainder + 1
     }
 }
 
