@@ -217,7 +217,7 @@ struct DynamicIslandTest: View {
                                     Slider(value: $BrushOpacity, in: 0...1)
                                         .tint(.yellow)
                                 }
-//                                CirclePreview(circleSize: BrushThickeness, circleOpacity: BrushOpacity)
+
                             }
                             .padding(.horizontal, 12)
                             .background {
@@ -235,6 +235,7 @@ struct DynamicIslandTest: View {
                             )
                                 .background {
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .offset(y: 10)
                                         .fill(ringColor.opacity(selectedControlRow == 3 ? 0.5 : 0))
                                 }
                                 .contentShape(Rectangle())
@@ -245,7 +246,6 @@ struct DynamicIslandTest: View {
                                 }
                                 .opacity(isExpanded ? 1 : 0)
                                 .disabled(!isExpanded)
-                            
                             
                         }
                         .frame(
@@ -377,7 +377,7 @@ private struct CirclePreview: View {
     let circleColor: Color
     
     var body: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
             .offset(y: 10)
             .fill(Color.white.opacity(0.15))
             .frame(width: 70, height: 70)
