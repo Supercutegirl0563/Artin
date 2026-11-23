@@ -45,6 +45,8 @@ struct DynamicIslandTest: View {
     @State private var drawingStrokes: [DrawingStroke] = []
     @State private var activeDrawingStroke: DrawingStroke?
     @State private var drawingStartHapticTick = 0
+    @State private var toolboxTapCount = 0
+    @State private var lastToolboxTapDate: Date?
     
     var body: some View {
         
@@ -363,6 +365,7 @@ struct DynamicIslandTest: View {
             .sensoryFeedback(.impact(weight: .light), trigger: drawingStartHapticTick)
             .simultaneousGesture(
                 TapGesture().onEnded {
+                    registerToolboxTap()
                     if isExpanded, selectedControlRow == 3, isCustomColorSelected {
                         isShowingAppleColorPicker = true
                     }
@@ -479,14 +482,6 @@ struct DynamicIslandTest: View {
                         horizontalHapticRemainder = 0
                     }
             )
-            .highPriorityGesture(
-                TapGesture(count: 3)
-                    .onEnded {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            isExpanded.toggle()
-                        }
-                    }
-            )
         }
         .ignoresSafeArea()
         .sheet(isPresented: $isShowingAppleColorPicker, onDismiss: finishCustomColorSelection) {
@@ -495,14 +490,36 @@ struct DynamicIslandTest: View {
         }
     }
     
+    private func registerToolboxTap() {
+        let now = Date()
+        if let lastToolboxTapDate,
+           now.timeIntervalSince(lastToolboxTapDate) <= 0.5 {
+            toolboxTapCount += 1
+        } else {
+            toolboxTapCount = 1
+        }
+        lastToolboxTapDate = now
+
+        guard toolboxTapCount == 3 else { return }
+        toolboxTapCount = 0
+        lastToolboxTapDate = nil
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            isExpanded.toggle()
+        }
+    }
+
     private var holdToDrawGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.4, maximumDistance: 20)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
             .onChanged { value in
-                guard !isExpanded, case .second(true, let drag?) = value else { return }
+                guard !isExpanded else { return }
+                if case .first(true) = value {
+                    drawingStartHapticTick += 1
+                    return
+                }
+                guard case .second(true, let drag?) = value else { return }
 
                 if activeDrawingStroke == nil {
-                    drawingStartHapticTick += 1
                     activeDrawingStroke = DrawingStroke(
                         points: [drag.startLocation],
                         color: selectedBrushColor,
