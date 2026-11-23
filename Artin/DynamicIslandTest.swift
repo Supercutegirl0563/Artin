@@ -239,36 +239,44 @@ struct DynamicIslandTest: View {
                                 .frame(width: 80, height: 80)
                                 // Color palette and custom color picker
                                 VStack(spacing: 12) {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 6) {
-                                            ForEach(paletteColors.indices, id: \.self) { index in
-                                                Button {
-                                                    selectedControlRow = 3
-                                                    if selectedPaletteIndex != index || isCustomColorSelected {
-                                                        paletteSelectionHapticTick += 1
-                                                    }
-                                                    selectedPaletteIndex = index
-                                                    isCustomColorSelected = false
-                                                    selectedBrushColor = paletteColors[index]
-                                                } label: {
-                                                    Circle()
-                                                        .fill(paletteColors[index])
-                                                        .frame(width: 28, height: 28)
-                                                        .overlay {
-                                                            Circle()
-                                                                .stroke(
-                                                                    Color.blue.opacity(!isCustomColorSelected && selectedPaletteIndex == index ? 1 : 0),
-                                                                    lineWidth: 3
-                                                                )
-                                                                .padding(-4)
+                                    ScrollViewReader { paletteScrollProxy in
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 6) {
+                                                ForEach(paletteColors.indices, id: \.self) { index in
+                                                    Button {
+                                                        selectedControlRow = 3
+                                                        if selectedPaletteIndex != index || isCustomColorSelected {
+                                                            paletteSelectionHapticTick += 1
                                                         }
+                                                        selectedPaletteIndex = index
+                                                        isCustomColorSelected = false
+                                                        selectedBrushColor = paletteColors[index]
+                                                    } label: {
+                                                        Circle()
+                                                            .fill(paletteColors[index])
+                                                            .frame(width: 28, height: 28)
+                                                            .overlay {
+                                                                Circle()
+                                                                    .stroke(
+                                                                        Color.blue.opacity(!isCustomColorSelected && selectedPaletteIndex == index ? 1 : 0),
+                                                                        lineWidth: 3
+                                                                    )
+                                                                    .padding(-4)
+                                                            }
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                    .padding(.vertical, 7)
+                                                    .id(index)
                                                 }
-                                                .buttonStyle(.plain)
-                                                .padding(.vertical, 7)
+                                            }
+                                        }
+                                        .frame(maxWidth: 180)
+                                        .onChange(of: selectedPaletteIndex) { _, index in
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                paletteScrollProxy.scrollTo(index, anchor: .center)
                                             }
                                         }
                                     }
-                                    .frame(maxWidth: 180)
 
                                     Button {
                                         selectedControlRow = 3
@@ -408,26 +416,30 @@ struct DynamicIslandTest: View {
                                 BrushOpacity = min(1, max(0, BrushOpacity + deltaX / 200))
                             } else {
                                 paletteSwipeRemainder += deltaX
-                                if abs(paletteSwipeRemainder) >= 40 {
+                                while abs(paletteSwipeRemainder) >= 40 {
                                     let paletteDirection = paletteSwipeRemainder < 0 ? 1 : -1
                                     let previousPaletteIndex = selectedPaletteIndex
                                     let wasCustomColorSelected = isCustomColorSelected
+                                    let nextPaletteIndex: Int
                                     if isCustomColorSelected {
-                                        selectedPaletteIndex = paletteDirection > 0 ? 0 : paletteColors.count - 1
-                                    } else if selectedPaletteIndex < 0 {
-                                        selectedPaletteIndex = 0
+                                        nextPaletteIndex = paletteDirection > 0 ? 0 : paletteColors.count - 1
                                     } else {
-                                        selectedPaletteIndex = min(
+                                        nextPaletteIndex = min(
                                             paletteColors.count - 1,
                                             max(0, selectedPaletteIndex + paletteDirection)
                                         )
                                     }
+
+                                    guard wasCustomColorSelected || nextPaletteIndex != previousPaletteIndex else {
+                                        paletteSwipeRemainder = 0
+                                        break
+                                    }
+
+                                    selectedPaletteIndex = nextPaletteIndex
                                     isCustomColorSelected = false
                                     selectedBrushColor = paletteColors[selectedPaletteIndex]
-                                    if wasCustomColorSelected || previousPaletteIndex != selectedPaletteIndex {
-                                        paletteSelectionHapticTick += 1
-                                    }
-                                    paletteSwipeRemainder = 0
+                                    paletteSelectionHapticTick += 1
+                                    paletteSwipeRemainder += CGFloat(paletteDirection) * 40
                                 }
                             }
 
@@ -469,6 +481,12 @@ struct DynamicIslandTest: View {
         selectedBrushColor = newPaletteColor
         if didChangeCustomColor {
             paletteColors.append(newPaletteColor)
+            if paletteColors.count > 15 {
+                paletteColors.remove(at: 5)
+                if selectedPaletteIndex > 5 {
+                    selectedPaletteIndex -= 1
+                }
+            }
         }
         isCustomColorSelected = true
         didChangeCustomColor = false
