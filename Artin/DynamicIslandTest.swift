@@ -36,12 +36,15 @@ struct DynamicIslandTest: View {
     @State private var paletteSelectionHapticTick = 0
     @State private var isShowingAppleColorPicker = false
     @State private var didChangeCustomColor = false
-    @State private var selectedBrushColor: Color = .blue
+    @State private var selectedBrushColor: Color = .yellow
     @State private var paletteColors: [Color] = [.yellow, .cyan, .pink, .green, .white]
     @State private var selectedPaletteIndex = 0
     @State private var isCustomColorSelected = false
     @State private var paletteSwipeRemainder: CGFloat = 0
     @State private var newPaletteColor: Color = .blue
+    @State private var drawingStrokes: [DrawingStroke] = []
+    @State private var activeDrawingStroke: DrawingStroke?
+    @State private var drawingStartHapticTick = 0
     
     var body: some View {
         
@@ -56,7 +59,17 @@ struct DynamicIslandTest: View {
                     blue: 255.0 / 255.0
                 )
                 .ignoresSafeArea()
-                
+                Canvas { context, _ in
+                    for stroke in drawingStrokes {
+                        render(stroke, in: &context)
+                    }
+                    if let activeDrawingStroke {
+                        render(activeDrawingStroke, in: &context)
+                    }
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
                 if let rect = NotchMyProblem.shared.adjustedExclusionRect {
                     
                     let lineWidth: CGFloat = 6
@@ -347,6 +360,7 @@ struct DynamicIslandTest: View {
             }
             .sensoryFeedback(.selection, trigger: paletteSelectionHapticTick)
             .sensoryFeedback(.selection, trigger: horizontalHapticTick)
+            .sensoryFeedback(.impact(weight: .light), trigger: drawingStartHapticTick)
             .simultaneousGesture(
                 TapGesture().onEnded {
                     if isExpanded, selectedControlRow == 3, isCustomColorSelected {
@@ -358,6 +372,7 @@ struct DynamicIslandTest: View {
                 selectedBrushColor = newColor
                 didChangeCustomColor = true
             }
+            .simultaneousGesture(holdToDrawGesture, isEnabled: !isExpanded)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 8, coordinateSpace: .named("toolboxRows"))
                     .onChanged { value in
@@ -464,11 +479,14 @@ struct DynamicIslandTest: View {
                         horizontalHapticRemainder = 0
                     }
             )
-            .onTapGesture(count: 3) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                    isExpanded.toggle()
-                }
-            }
+            .highPriorityGesture(
+                TapGesture(count: 3)
+                    .onEnded {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            isExpanded.toggle()
+                        }
+                    }
+            )
         }
         .ignoresSafeArea()
         .sheet(isPresented: $isShowingAppleColorPicker, onDismiss: finishCustomColorSelection) {
@@ -477,6 +495,72 @@ struct DynamicIslandTest: View {
         }
     }
     
+    private var holdToDrawGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.4, maximumDistance: 20)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+            .onChanged { value in
+                guard !isExpanded, case .second(true, let drag?) = value else { return }
+
+                if activeDrawingStroke == nil {
+                    drawingStartHapticTick += 1
+                    activeDrawingStroke = DrawingStroke(
+                        points: [drag.startLocation],
+                        color: selectedBrushColor,
+                        lineWidth: CGFloat(BrushThickeness),
+                        opacity: BrushOpacity
+                    )
+                }
+
+                guard var stroke = activeDrawingStroke else { return }
+                if stroke.points.last != drag.location {
+                    stroke.points.append(drag.location)
+                    activeDrawingStroke = stroke
+                }
+            }
+            .onEnded { value in
+                defer { activeDrawingStroke = nil }
+                guard !isExpanded, case .second(true, let drag?) = value else { return }
+
+                var stroke = activeDrawingStroke ?? DrawingStroke(
+                    points: [drag.startLocation],
+                    color: selectedBrushColor,
+                    lineWidth: CGFloat(BrushThickeness),
+                    opacity: BrushOpacity
+                )
+                if stroke.points.last != drag.location {
+                    stroke.points.append(drag.location)
+                }
+                drawingStrokes.append(stroke)
+            }
+    }
+
+    private func render(_ stroke: DrawingStroke, in context: inout GraphicsContext) {
+        guard let firstPoint = stroke.points.first else { return }
+        let color = stroke.color.opacity(stroke.opacity)
+
+        if stroke.points.count == 1 {
+            let dotRect = CGRect(
+                x: firstPoint.x - stroke.lineWidth / 2,
+                y: firstPoint.y - stroke.lineWidth / 2,
+                width: stroke.lineWidth,
+                height: stroke.lineWidth
+            )
+            context.fill(Path(ellipseIn: dotRect), with: .color(color))
+            return
+        }
+
+        var path = Path()
+        path.move(to: firstPoint)
+        for point in stroke.points.dropFirst() {
+            path.addLine(to: point)
+        }
+        context.stroke(
+            path,
+            with: .color(color),
+            style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
+        )
+    }
+
     private func finishCustomColorSelection() {
         selectedBrushColor = newPaletteColor
         if didChangeCustomColor {
@@ -521,6 +605,13 @@ struct DynamicIslandTest: View {
                 }
         }
     }
+}
+
+private struct DrawingStroke {
+    var points: [CGPoint]
+    let color: Color
+    let lineWidth: CGFloat
+    let opacity: Double
 }
 
 private struct AppleColorPicker: UIViewControllerRepresentable {
